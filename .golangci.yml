@@ -1,0 +1,78 @@
+version: "2"
+
+run:
+  concurrency: 8
+  timeout: 10m
+  modules-download-mode: readonly
+
+output:
+  format: line-number
+
+linters:
+  enable:
+    - asciicheck
+    - depguard
+    - errcheck
+    - errname
+    - exptostd
+    - godot
+    - gosec
+    - govet
+    - iface
+    - ineffassign
+    - unused
+    - nilnesserr
+    - recvcheck
+    - sloglint
+    - testifylint
+    - unconvert
+  settings:
+    depguard:
+      rules:
+        forbid-pkg-errors:
+          deny:
+            - pkg: github.com/pkg/errors
+              desc: Should be replaced with standard lib errors or fmt.Errorf
+            - pkg: sort
+              desc: Should be replaced with slices package
+    errcheck:
+      exclude-functions:
+        # Any error in HTTP handlers is handled by the server itself.
+        - (net/http.ResponseWriter).Write
+    modernize:
+      disable:
+        - omitzero
+  exclusions:
+    generated: strict
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # Disable errcheck linter for test files.
+      - linters:
+          - errcheck
+          - staticcheck
+          - testifylint
+          - revive
+        path: _test.go
+    paths:
+      - zz_generated.*\.go$
+      - examples$
+
+linters-settings:
+  formatters:
+    gofumpt:
+    goimports:
+
+  errcheck:
+    # Report `a := b.(MyStruct)` when `a, ok := ...` should be.
+    check-type-assertions: true
+
+    # Report skipped checks:`num, _ := strconv.Atoi(numStr)`.
+    check-blank: true
+
+  govet:
+    disable:
+      - fieldalignment

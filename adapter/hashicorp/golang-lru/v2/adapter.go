@@ -1,0 +1,24 @@
+package adapter
+
+import (
+	"context"
+
+	lru "github.com/hashicorp/golang-lru/v2"
+)
+
+type LRU[K comparable, V any] struct {
+	underlying *lru.Cache[K, V]
+}
+
+func From[K comparable, V any](underlying *lru.Cache[K, V]) *LRU[K, V] {
+	return &LRU[K, V]{underlying: underlying}
+}
+
+func (a *LRU[K, V]) Get(_ context.Context, key K) (V, bool) {
+	return a.underlying.Get(key)
+}
+
+func (a *LRU[K, V]) Set(_ context.Context, key K, value V) {
+	// Discard the eviction bool, use the callbacks if needed
+	_ = a.underlying.Add(key, value)
+}
