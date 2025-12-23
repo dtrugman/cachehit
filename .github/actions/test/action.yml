@@ -1,0 +1,52 @@
+name: 'Build and Test'
+description: 'Run Go build, tests, and coverage'
+
+inputs:
+  go-version:
+    description: 'Go version to use'
+    required: false
+    default: '1.24.2'
+
+outputs:
+  coverage:
+    description: 'Total coverage percentage'
+    value: ${{ steps.coverage.outputs.coverage }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+        cache: true
+
+    - name: Download dependencies
+      shell: bash
+      run: go mod download
+
+    - name: Run go fmt
+      shell: bash
+      run: |
+        if [ -n "$(gofmt -l .)" ]; then
+          echo "Go code is not formatted:"
+          gofmt -d .
+          exit 1
+        fi
+
+    - name: Run go vet
+      shell: bash
+      run: go vet ./...
+
+    - name: Run tests with coverage
+      shell: bash
+      run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+    - name: Generate coverage report
+      id: coverage
+      shell: bash
+      run: |
+        go tool cover -func=coverage.out -o=coverage.txt
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')
+        echo "Total coverage: $COVERAGE"
+        echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT

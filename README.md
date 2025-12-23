@@ -1,5 +1,8 @@
 # cachehit
 
+![Tests](https://github.com/dtrugman/cachehit/actions/workflows/merge.yml/badge.svg)
+[![codecov](https://codecov.io/gh/dtrugman/cachehit/branch/main/graph/badge.svg)](https://codecov.io/gh/dtrugman/cachehit)
+
 A Go library providing high-performance caching constructs with stale-while-revalidate semantics and look-through patterns.
 
 ## Cache Constructs
