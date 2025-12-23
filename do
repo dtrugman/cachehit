@@ -16,7 +16,7 @@ print_success() {
 }
 
 print_done() {
-    print_success "done"
+    print_success "Done"
 }
 
 print_error() {
@@ -48,9 +48,12 @@ EOF
 }
 
 build() {
-    print_step "Building example..."
+    print_step "Building examples..."
 
-    go build -o "$DIST_DIR/example" "./example"
+    go build -o "$DIST_DIR/swr" "./example/swr"
+    go build -o "$DIST_DIR/layered" "./example/layered"
+
+    print_done
 }
 
 test() {
