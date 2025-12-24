@@ -38,7 +38,7 @@ func newSWR[K comparable, V any](
 	timeToStale time.Duration,
 	timeToDead time.Duration,
 	syncMap syncMap,
-	opts ...Option,
+	opts ...SWROption,
 ) (*SWR[K, V], error) {
 	if cache == nil {
 		return nil, fmt.Errorf("nil cache")
@@ -56,7 +56,7 @@ func newSWR[K comparable, V any](
 		return nil, fmt.Errorf("time to dead must be positive")
 	}
 
-	o := compileOptions(opts...)
+	o := swrCompileOptions(opts...)
 	if err := o.Validate(); err != nil {
 		return nil, fmt.Errorf("options: %w", err)
 	}
@@ -91,7 +91,7 @@ func NewSWR[K comparable, V any](
 	repo Repository[K, V],
 	timeToStale time.Duration,
 	timeToDead time.Duration,
-	opts ...Option,
+	opts ...SWROption,
 ) (*SWR[K, V], error) {
 	cache, err := lru.New[K, *entry[V]](cacheSize)
 	if err != nil {

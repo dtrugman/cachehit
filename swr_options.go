@@ -6,18 +6,18 @@ import (
 )
 
 const (
-	DefaultRefreshWorkers    = 3
-	DefaultRefreshBufferSize = 256
-	DefaultRefreshTimeout    = 15 * time.Second
+	SWRDefaultRefreshWorkers    = 3
+	SWRDefaultRefreshBufferSize = 256
+	SWRDefaultRefreshTimeout    = 15 * time.Second
 )
 
-type options struct {
+type swrOptions struct {
 	refreshWorkers    int
 	refreshBufferSize int
 	refreshTimeout    time.Duration
 }
 
-func (o *options) Validate() error {
+func (o *swrOptions) Validate() error {
 	if o.refreshWorkers <= 0 {
 		return fmt.Errorf("workers count must be positive")
 	}
@@ -33,16 +33,16 @@ func (o *options) Validate() error {
 	return nil
 }
 
-func defaultOptions() *options {
-	return &options{
-		refreshWorkers:    DefaultRefreshWorkers,
-		refreshBufferSize: DefaultRefreshBufferSize,
-		refreshTimeout:    DefaultRefreshTimeout,
+func swrDefaultOptions() *swrOptions {
+	return &swrOptions{
+		refreshWorkers:    SWRDefaultRefreshWorkers,
+		refreshBufferSize: SWRDefaultRefreshBufferSize,
+		refreshTimeout:    SWRDefaultRefreshTimeout,
 	}
 }
 
-func compileOptions(opts ...Option) *options {
-	o := defaultOptions()
+func swrCompileOptions(opts ...SWROption) *swrOptions {
+	o := swrDefaultOptions()
 
 	for _, opt := range opts {
 		opt(o)
@@ -51,28 +51,28 @@ func compileOptions(opts ...Option) *options {
 	return o
 }
 
-type Option func(*options)
+type SWROption func(*swrOptions)
 
-// WithRefreshWorkers configures the SWR cache to use N worker
+// SWRWithRefreshWorkers configures the SWR cache to use N worker
 // goroutines to refresh value asynchronously.
-func WithRefreshWorkers(workers int) Option {
-	return func(o *options) {
+func SWRWithRefreshWorkers(workers int) SWROption {
+	return func(o *swrOptions) {
 		o.refreshWorkers = workers
 	}
 }
 
-// WithRefreshWorkers configures the SWR cache to queue up to N
+// SWRWithRefreshBufferSize configures the SWR cache to queue up to N
 // async refresh requests.
-func WithRefreshBufferSize(size int) Option {
-	return func(o *options) {
+func SWRWithRefreshBufferSize(size int) SWROption {
+	return func(o *swrOptions) {
 		o.refreshBufferSize = size
 	}
 }
 
-// WithRefreshTimeout configures the SWR cache to timeout async
+// SWRWithRefreshTimeout configures the SWR cache to timeout async
 // refresh requests after the specified amount of time.
-func WithRefreshTimeout(timeout time.Duration) Option {
-	return func(o *options) {
+func SWRWithRefreshTimeout(timeout time.Duration) SWROption {
+	return func(o *swrOptions) {
 		o.refreshTimeout = timeout
 	}
 }

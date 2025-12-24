@@ -44,7 +44,7 @@ func NewSWR[K comparable, V any](
     repo Repository[K, V],
     timeToStale time.Duration,
     timeToDead time.Duration,
-    opts ...Option,
+    opts ...SWROption,
 ) (*SWR[K, V], error)
 ```
 
@@ -54,9 +54,9 @@ func NewSWR[K comparable, V any](
 - `timeToDead`: Duration after which data is considered dead
 
 Available options:
-- `WithRefreshWorkers(n int)`: Number of background workers for async refreshes (default: 1)
-- `WithRefreshBufferSize(size int)`: Channel buffer size for refresh queue (default: 100)
-- `WithRefreshTimeout(timeout time.Duration)`: Timeout for background refresh operations (default: 30s)
+- `SWRWithRefreshWorkers(n int)`: Number of background workers for async refreshes (default: 1)
+- `SWRWithRefreshBufferSize(size int)`: Channel buffer size for refresh queue (default: 100)
+- `SWRWithRefreshTimeout(timeout time.Duration)`: Timeout for background refresh operations (default: 30s)
 
 #### Usage
 

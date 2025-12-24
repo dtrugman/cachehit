@@ -74,9 +74,9 @@ func Test_SWR_New_WithAllOptions(t *testing.T) {
 	repo := &mockRepo[string, string]{}
 
 	swr, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{},
-		WithRefreshWorkers(5),
-		WithRefreshBufferSize(128),
-		WithRefreshTimeout(30*time.Second),
+		SWRWithRefreshWorkers(5),
+		SWRWithRefreshBufferSize(128),
+		SWRWithRefreshTimeout(30*time.Second),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, swr)
@@ -87,37 +87,37 @@ func Test_SWR_New_WithInvalidOptions(t *testing.T) {
 	repo := &mockRepo[string, string]{}
 
 	t.Run("zero refresh workers", func(t *testing.T) {
-		_, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{}, WithRefreshWorkers(0))
+		_, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{}, SWRWithRefreshWorkers(0))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "workers count must be positive")
 	})
 
 	t.Run("negative refresh workers", func(t *testing.T) {
-		_, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{}, WithRefreshWorkers(-1))
+		_, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{}, SWRWithRefreshWorkers(-1))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "workers count must be positive")
 	})
 
 	t.Run("zero refresh buffer", func(t *testing.T) {
-		_, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{}, WithRefreshBufferSize(0))
+		_, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{}, SWRWithRefreshBufferSize(0))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "buffer size must be positive")
 	})
 
 	t.Run("negative refresh buffer", func(t *testing.T) {
-		_, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{}, WithRefreshBufferSize(-1))
+		_, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{}, SWRWithRefreshBufferSize(-1))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "buffer size must be positive")
 	})
 
 	t.Run("zero refresh timeout", func(t *testing.T) {
-		_, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{}, WithRefreshTimeout(0))
+		_, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{}, SWRWithRefreshTimeout(0))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "timeout must be positive")
 	})
 
 	t.Run("negative refresh timeout", func(t *testing.T) {
-		_, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{}, WithRefreshTimeout(-1))
+		_, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{}, SWRWithRefreshTimeout(-1))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "timeout must be positive")
 	})
@@ -512,8 +512,8 @@ func Test_SWR_RefreshKey_GracefulHandleFullChannel(t *testing.T) {
 	syncMap.On("Delete", key2).Maybe()
 
 	swr, err := newSWR(repo, cache, timeToStale, timeToDead, syncMap,
-		WithRefreshBufferSize(1),
-		WithRefreshWorkers(1),
+		SWRWithRefreshBufferSize(1),
+		SWRWithRefreshWorkers(1),
 	)
 	require.NoError(t, err)
 
