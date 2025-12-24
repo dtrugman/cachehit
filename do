@@ -42,7 +42,6 @@ Commands:
     deps            Download dependencies
     tidy-deps       Tidy dependencies
     upgrade-deps    Upgrade dependencies
-    ci              Run CI pipeline locally
 
 EOF
 }
