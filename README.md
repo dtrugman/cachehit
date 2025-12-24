@@ -57,6 +57,7 @@ Available options:
 - `SWRWithRefreshWorkers(n int)`: Number of background workers for async refreshes (default: 1)
 - `SWRWithRefreshBufferSize(size int)`: Channel buffer size for refresh queue (default: 100)
 - `SWRWithRefreshTimeout(timeout time.Duration)`: Timeout for background refresh operations (default: 30s)
+- `SWRWithErrorCallback(callback ErrorCallback)`: Callback for internal errors during cache operations
 
 #### Usage
 
@@ -98,11 +99,15 @@ Since the `Repository` interface is generic, one LookThrough cache can use anoth
 func NewLookThrough[K comparable, V any](
     cache Cache[K, V],
     repo Repository[K, V],
-) *LookThrough[K, V]
+    opts ...LookThroughOption,
+) (*LookThrough[K, V], error)
 ```
 
 - `cache`: Any cache implementing the `Cache[K, V]` interface
 - `repo`: Data source implementing the `Repository[K, V]` interface
+
+Available options:
+- `LookThroughWithErrorCallback(callback ErrorCallback)`: Callback for internal errors during cache operations
 
 #### Usage
 

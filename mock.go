@@ -15,8 +15,9 @@ func (m *mockCache[K, V]) Get(ctx context.Context, key K) (V, bool) {
 	return args.Get(0).(V), args.Bool(1)
 }
 
-func (m *mockCache[K, V]) Set(ctx context.Context, key K, value V) {
-	m.Called(ctx, key, value)
+func (m *mockCache[K, V]) Set(ctx context.Context, key K, value V) error {
+	args := m.Called(ctx, key, value)
+	return args.Error(0)
 }
 
 type mockRepo[K comparable, V any] struct {

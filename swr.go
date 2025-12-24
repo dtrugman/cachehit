@@ -30,6 +30,8 @@ type SWR[K comparable, V any] struct {
 	refreshChan    chan K
 	refreshTimeout time.Duration
 	refreshKeys    syncMap
+
+	errorCallback ErrorCallback
 }
 
 func newSWR[K comparable, V any](
@@ -77,6 +79,8 @@ func newSWR[K comparable, V any](
 		refreshChan:    refreshChan,
 		refreshTimeout: o.refreshTimeout,
 		refreshKeys:    syncMap,
+
+		errorCallback: o.errorCallback,
 	}
 
 	for range o.refreshWorkers {
@@ -129,6 +133,12 @@ func (c *SWR[K, V]) refreshKey(key K) {
 	}
 }
 
+func (c *SWR[K, V]) reportError(err error) {
+	if c.errorCallback != nil {
+		c.errorCallback(err)
+	}
+}
+
 func (c *SWR[K, V]) get(ctx context.Context, key K) (V, bool) {
 	k := fmt.Sprintf("%v", key)
 	res, err, _ := c.dedup.Do(k, func() (interface{}, error) {
@@ -147,7 +157,9 @@ func (c *SWR[K, V]) get(ctx context.Context, key K) (V, bool) {
 			value:   value,
 		}
 
-		c.cache.Set(ctx, key, entry)
+		if err := c.cache.Set(ctx, key, entry); err != nil {
+			c.reportError(fmt.Errorf("cache set: %v: %w", key, err))
+		}
 		return value, nil
 	})
 

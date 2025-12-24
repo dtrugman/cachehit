@@ -18,7 +18,8 @@ func (a *LRU[K, V]) Get(_ context.Context, key K) (V, bool) {
 	return a.underlying.Get(key)
 }
 
-func (a *LRU[K, V]) Set(_ context.Context, key K, value V) {
+func (a *LRU[K, V]) Set(_ context.Context, key K, value V) error {
 	// Discard the eviction bool, use the callbacks if needed
 	_ = a.underlying.Add(key, value)
+	return nil
 }

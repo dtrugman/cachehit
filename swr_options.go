@@ -15,6 +15,8 @@ type swrOptions struct {
 	refreshWorkers    int
 	refreshBufferSize int
 	refreshTimeout    time.Duration
+
+	errorCallback ErrorCallback
 }
 
 func (o *swrOptions) Validate() error {
@@ -74,5 +76,13 @@ func SWRWithRefreshBufferSize(size int) SWROption {
 func SWRWithRefreshTimeout(timeout time.Duration) SWROption {
 	return func(o *swrOptions) {
 		o.refreshTimeout = timeout
+	}
+}
+
+// SWRWithErrorCallback configures the look through cache to call the
+// specified callback synchronously when an error happens during internal operations.
+func SWRWithErrorCallback(errorCallback ErrorCallback) SWROption {
+	return func(o *swrOptions) {
+		o.errorCallback = errorCallback
 	}
 }

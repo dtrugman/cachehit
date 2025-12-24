@@ -68,7 +68,10 @@ func run() error {
 
 	httpRepo := resource.NewGithubUserRepository()
 
-	lookthrough := cachehit.NewLookThrough(redisCache, httpRepo)
+	lookthrough, err := cachehit.NewLookThrough(redisCache, httpRepo)
+	if err != nil {
+		return fmt.Errorf("look through: %w", err)
+	}
 
 	cacheSize := 128
 	timeToStale := 10 * time.Second

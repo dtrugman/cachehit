@@ -177,7 +177,7 @@ func (r *Redis[K, V]) Get(ctx context.Context, key K) (V, bool) {
 	return value, true
 }
 
-func (r *Redis[K, V]) Set(ctx context.Context, key K, value V) {
+func (r *Redis[K, V]) Set(ctx context.Context, key K, value V) error {
 	keyStr := fmt.Sprintf("%v", key)
 
 	var valueStr string
@@ -214,10 +214,11 @@ func (r *Redis[K, V]) Set(ctx context.Context, key K, value V) {
 	default:
 		valueBytes, err := json.Marshal(value)
 		if err != nil {
-			return
+			return fmt.Errorf("marshal value: %w", err)
 		}
 		valueStr = string(valueBytes)
 	}
 
-	_ = r.underlying.Set(ctx, keyStr, valueStr, r.expiration)
+	cmd := r.underlying.Set(ctx, keyStr, valueStr, r.expiration)
+	return cmd.Err()
 }

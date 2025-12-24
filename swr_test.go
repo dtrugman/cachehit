@@ -2,6 +2,7 @@ package cachehit
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"sync"
 	"testing"
@@ -198,7 +199,7 @@ func Test_SWR_ValueMissing_InRepository(t *testing.T) {
 
 	repo.On("Get", ctx, key).Return(expected, true)
 
-	cache.On("Set", ctx, key, mock.MatchedBy(entryMatcher))
+	cache.On("Set", ctx, key, mock.MatchedBy(entryMatcher)).Return(nil)
 
 	swr, err := newSWR(repo, cache, timeToStale, timeToDead, &sync.Map{})
 	require.NoError(t, err)
@@ -239,7 +240,7 @@ func Test_SWR_ValueStale_InRepository(t *testing.T) {
 		}).
 		Return(newValue, true)
 
-	cache.On("Set", mock.MatchedBy(isTimeoutContext), key, mock.MatchedBy(entryMatcher))
+	cache.On("Set", mock.MatchedBy(isTimeoutContext), key, mock.MatchedBy(entryMatcher)).Return(nil)
 
 	swr, err := newSWR(repo, cache, timeToStale, timeToDead, &sync.Map{})
 	require.NoError(t, err)
@@ -306,7 +307,7 @@ func Test_SWR_ParallelFetchWhenMissing(t *testing.T) {
 		Return(expected, true).
 		Once()
 
-	cache.On("Set", ctx, key, mock.MatchedBy(entryMatcher)).Once()
+	cache.On("Set", ctx, key, mock.MatchedBy(entryMatcher)).Return(nil).Once()
 
 	swr, err := newSWR(repo, cache, timeToStale, timeToDead, &sync.Map{})
 	require.NoError(t, err)
@@ -368,7 +369,7 @@ func Test_SWR_ParallelFetchWhenStale(t *testing.T) {
 		Return(newValue, true).
 		Once()
 
-	cache.On("Set", mock.MatchedBy(isTimeoutContext), key, mock.MatchedBy(entryMatcher)).Once()
+	cache.On("Set", mock.MatchedBy(isTimeoutContext), key, mock.MatchedBy(entryMatcher)).Return(nil).Once()
 
 	swr, err := newSWR(repo, cache, timeToStale, timeToDead, &sync.Map{})
 	require.NoError(t, err)
@@ -419,7 +420,7 @@ func Test_SWR_ValueDead_RefreshFromRepository(t *testing.T) {
 
 	cache := &mockCache[string, *entry[string]]{}
 	cache.On("Get", ctx, key).Return(deadEntry, true)
-	cache.On("Set", ctx, key, mock.MatchedBy(entryMatcher))
+	cache.On("Set", ctx, key, mock.MatchedBy(entryMatcher)).Return(nil)
 
 	repo := &mockRepo[string, string]{}
 	repo.On("Get", ctx, key).Return(newValue, true)
@@ -487,7 +488,7 @@ func Test_SWR_RefreshKey_GracefulHandleFullChannel(t *testing.T) {
 	cache.On("Set", mock.MatchedBy(isTimeoutContext), key1, mock.MatchedBy(entryMatcher1)).
 		Run(func(args mock.Arguments) {
 			workerDone.Done()
-		}).Once()
+		}).Return(nil).Once()
 	syncMap.On("Delete", key1).Once()
 
 	// The second stale key refresh request shoud be pending in the channel,
@@ -508,7 +509,8 @@ func Test_SWR_RefreshKey_GracefulHandleFullChannel(t *testing.T) {
 	// The refresh flow for key2 may or may not complete
 	repo.On("Get", mock.MatchedBy(isTimeoutContext), key2).
 		Return(value2, true).Maybe()
-	cache.On("Set", mock.MatchedBy(isTimeoutContext), key2, mock.MatchedBy(entryMatcher2)).Maybe()
+	cache.On("Set", mock.MatchedBy(isTimeoutContext), key2, mock.MatchedBy(entryMatcher2)).
+		Return(nil).Maybe()
 	syncMap.On("Delete", key2).Maybe()
 
 	swr, err := newSWR(repo, cache, timeToStale, timeToDead, syncMap,
@@ -526,6 +528,140 @@ func Test_SWR_RefreshKey_GracefulHandleFullChannel(t *testing.T) {
 
 	workerUnblocked.Done()
 	workerDone.Wait()
+
+	repo.AssertExpectations(t)
+	cache.AssertExpectations(t)
+}
+
+func Test_SWR_ErrorCallback_CacheSetError(t *testing.T) {
+	ctx := t.Context()
+
+	key := "key"
+	expected := "value"
+
+	timeToStale := time.Minute
+	timeToDead := 2 * time.Minute
+
+	entryMatcher := getEntryMatcher(expected, timeToStale, timeToDead)
+
+	cache := &mockCache[string, *entry[string]]{}
+	repo := &mockRepo[string, string]{}
+
+	cache.On("Get", ctx, key).Return(nilEntry, false)
+	repo.On("Get", ctx, key).Return(expected, true)
+
+	cacheSetErr := errors.New("failure")
+	cache.On("Set", ctx, key, mock.MatchedBy(entryMatcher)).Return(cacheSetErr)
+
+	var capturedErr error
+	errorCallback := func(err error) {
+		capturedErr = err
+	}
+
+	swr, err := newSWR(repo, cache, timeToStale, timeToDead, &sync.Map{},
+		SWRWithErrorCallback(errorCallback),
+	)
+	require.NoError(t, err)
+
+	actual, found := swr.Get(ctx, key)
+	require.True(t, found)
+	require.Equal(t, expected, actual)
+
+	require.NotNil(t, capturedErr)
+	require.ErrorIs(t, capturedErr, cacheSetErr)
+
+	repo.AssertExpectations(t)
+	cache.AssertExpectations(t)
+}
+
+func Test_SWR_ErrorCallback_CacheGetError(t *testing.T) {
+	ctx := t.Context()
+
+	key := "key"
+	expected := "value"
+
+	timeToStale := time.Minute
+	timeToDead := 2 * time.Minute
+
+	entryMatcher := getEntryMatcher(expected, timeToStale, timeToDead)
+
+	cache := &mockCache[string, *entry[string]]{}
+	repo := &mockRepo[string, string]{}
+
+	cacheGetErr := errors.New("failure")
+	cache.On("Get", ctx, key).Return(nilEntry, cacheGetErr)
+
+	repo.On("Get", ctx, key).Return(expected, nil)
+	cache.On("Set", ctx, key, mock.MatchedBy(entryMatcher)).Return(nil)
+
+	var capturedErr error
+	errorCallback := func(err error) {
+		capturedErr = err
+	}
+
+	swr, err := newSWR(repo, cache, timeToStale, timeToDead, &sync.Map{},
+		SWRWithErrorCallback(errorCallback),
+	)
+	require.NoError(t, err)
+
+	actual, err := swr.Get(ctx, key)
+	require.NoError(t, err)
+	require.Equal(t, expected, actual)
+
+	require.NotNil(t, capturedErr)
+	require.ErrorIs(t, capturedErr, cacheGetErr)
+
+	repo.AssertExpectations(t)
+	cache.AssertExpectations(t)
+}
+
+func Test_SWR_ErrorCallback_RefreshWorkerError(t *testing.T) {
+	timeout := 1 * time.Second
+	ctx := t.Context()
+
+	key := "key"
+	value := "value"
+
+	timeToStale := time.Minute
+	timeToDead := 2 * time.Minute
+
+	staleEntry := makeStaleEntry(value)
+
+	errorCaptured := make(chan struct{})
+
+	cache := &mockCache[string, *entry[string]]{}
+	repo := &mockRepo[string, string]{}
+
+	cache.On("Get", ctx, key).Return(staleEntry, nil)
+
+	repoGetErr := errors.New("failure")
+	repo.On("Get", mock.MatchedBy(isTimeoutContext), key).Return("", repoGetErr)
+
+	var capturedErr error
+	errorCallback := func(err error) {
+		capturedErr = err
+		close(errorCaptured)
+	}
+
+	syncMap := &sync.Map{}
+
+	swr, err := newSWR(repo, cache, timeToStale, timeToDead, syncMap,
+		SWRWithErrorCallback(errorCallback),
+	)
+	require.NoError(t, err)
+
+	actual, err := swr.Get(ctx, key)
+	require.NoError(t, err)
+	require.Equal(t, value, actual)
+
+	select {
+	case <-errorCaptured:
+	case <-time.After(timeout):
+		t.Fatal("error callback was not called")
+	}
+
+	require.NotNil(t, capturedErr)
+	require.ErrorIs(t, capturedErr, repoGetErr)
 
 	repo.AssertExpectations(t)
 	cache.AssertExpectations(t)

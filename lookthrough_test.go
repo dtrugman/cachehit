@@ -1,6 +1,7 @@
 package cachehit
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -20,7 +21,9 @@ func Test_LookThrough_ValueMissing(t *testing.T) {
 	repo := &mockCache[string, string]{}
 	repo.On("Get", ctx, key).Return("", false)
 
-	lt := NewLookThrough(cache, repo)
+	lt, err := NewLookThrough(cache, repo)
+	require.NoError(t, err)
+
 	_, found := lt.Get(ctx, key)
 	require.False(t, found)
 
@@ -36,12 +39,14 @@ func Test_LookThrough_ValueInRepository(t *testing.T) {
 
 	cache := &mockCache[string, string]{}
 	cache.On("Get", ctx, key).Return("", false)
-	cache.On("Set", ctx, key, expected)
+	cache.On("Set", ctx, key, expected).Return(nil)
 
 	repo := &mockCache[string, string]{}
 	repo.On("Get", ctx, key).Return(expected, true)
 
-	lt := NewLookThrough(cache, repo)
+	lt, err := NewLookThrough(cache, repo)
+	require.NoError(t, err)
+
 	actual, found := lt.Get(ctx, key)
 	require.True(t, found)
 	require.Equal(t, expected, actual)
@@ -61,7 +66,9 @@ func Test_LookThrough_ValueInCache(t *testing.T) {
 
 	repo := &mockCache[string, string]{}
 
-	lt := NewLookThrough(cache, repo)
+	lt, err := NewLookThrough(cache, repo)
+	require.NoError(t, err)
+
 	actual, found := lt.Get(ctx, key)
 	require.True(t, found)
 	require.Equal(t, expected, actual)
@@ -80,7 +87,7 @@ func Test_LookThrough_ParallelFetch(t *testing.T) {
 
 	cache := &mockCache[string, string]{}
 	cache.On("Get", ctx, key).Return("", false).Times(n)
-	cache.On("Set", ctx, key, expected).Once()
+	cache.On("Set", ctx, key, expected).Return(nil).Once()
 
 	repo := &mockCache[string, string]{}
 	repo.On("Get", ctx, key).
@@ -90,7 +97,8 @@ func Test_LookThrough_ParallelFetch(t *testing.T) {
 		Return(expected, true).
 		Once()
 
-	lt := NewLookThrough(cache, repo)
+	lt, err := NewLookThrough(cache, repo)
+	require.NoError(t, err)
 
 	ready := sync.WaitGroup{}
 	ready.Add(n)
@@ -112,6 +120,72 @@ func Test_LookThrough_ParallelFetch(t *testing.T) {
 	}
 
 	done.Wait()
+
+	repo.AssertExpectations(t)
+	cache.AssertExpectations(t)
+}
+
+func Test_LookThrough_ErrorCallbackCalled_CacheSet(t *testing.T) {
+	ctx := t.Context()
+
+	key := "key"
+	value := "value"
+	cacheSetErr := errors.New("failed")
+
+	cache := &mockCache[string, string]{}
+	cache.On("Get", ctx, key).Return("", false)
+	cache.On("Set", ctx, key, value).Return(cacheSetErr)
+
+	repo := &mockCache[string, string]{}
+	repo.On("Get", ctx, key).Return(value, true)
+
+	var capturedErr error
+	errorCallback := func(err error) {
+		capturedErr = err
+	}
+
+	lt, err := NewLookThrough(cache, repo, LookThroughWithErrorCallback(errorCallback))
+	require.NoError(t, err)
+
+	actual, found := lt.Get(ctx, key)
+	require.True(t, found)
+	require.Equal(t, value, actual)
+
+	require.NotNil(t, capturedErr)
+	require.ErrorIs(t, capturedErr, cacheSetErr)
+
+	repo.AssertExpectations(t)
+	cache.AssertExpectations(t)
+}
+
+func Test_LookThrough_ErrorCallbackCalled_CacheGet(t *testing.T) {
+	ctx := t.Context()
+
+	key := "key"
+	value := "value"
+	cacheGetErr := errors.New("failed")
+
+	cache := &mockCache[string, string]{}
+	repo := &mockCache[string, string]{}
+
+	cache.On("Get", ctx, key).Return("", cacheGetErr)
+	repo.On("Get", ctx, key).Return(value, nil)
+	cache.On("Set", ctx, key, value).Return(nil)
+
+	var capturedErr error
+	errorCallback := func(err error) {
+		capturedErr = err
+	}
+
+	lt, err := NewLookThrough(cache, repo, LookThroughWithErrorCallback(errorCallback))
+	require.NoError(t, err)
+
+	actual, err := lt.Get(ctx, key)
+	require.NoError(t, err)
+	require.Equal(t, value, actual)
+
+	require.NotNil(t, capturedErr)
+	require.ErrorIs(t, capturedErr, cacheGetErr)
 
 	repo.AssertExpectations(t)
 	cache.AssertExpectations(t)
