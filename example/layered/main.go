@@ -51,7 +51,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("init redis: %w", err)
 	}
-	defer redisInstance.Cleanup()
+	defer func() {
+		if err := redisInstance.Cleanup(); err != nil {
+			fmt.Println("Cleanup redis failed: ", err)
+		}
+	}()
 
 	redisDB, err := resource.RedisConn(ctx, redisInstance.DSN)
 	if err != nil {
