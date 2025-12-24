@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dtrugman/cachehit/internal"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -26,12 +27,12 @@ func TestLRU_Get(t *testing.T) {
 
 	cache.Add("key1", "value1")
 
-	value, ok := adapter.Get(ctx, "key1")
-	require.True(t, ok)
+	value, err := adapter.Get(ctx, "key1")
+	require.NoError(t, err)
 	require.Equal(t, "value1", value)
 
-	value, ok = adapter.Get(ctx, "nonexistent")
-	require.False(t, ok)
+	value, err = adapter.Get(ctx, "nonexistent")
+	require.ErrorIs(t, err, internal.ErrNotFound)
 	require.Equal(t, "", value)
 }
 

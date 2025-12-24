@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/dtrugman/cachehit/internal"
 )
 
 type GithubUser struct {
@@ -26,28 +28,30 @@ func NewGithubUserRepository() *GithubUserRepository {
 	}
 }
 
-func (r *GithubUserRepository) Get(ctx context.Context, username string) (GithubUser, bool) {
+func (r *GithubUserRepository) Get(ctx context.Context, username string) (GithubUser, error) {
 	url := fmt.Sprintf("https://api.github.com/users/%s", username)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return GithubUser{}, false
+		return GithubUser{}, fmt.Errorf("new request: %w", err)
 	}
 
 	resp, err := r.client.Do(req)
 	if err != nil {
-		return GithubUser{}, false
+		return GithubUser{}, fmt.Errorf("send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return GithubUser{}, false
+	if resp.StatusCode == http.StatusNotFound {
+		return GithubUser{}, internal.ErrNotFound
+	} else if resp.StatusCode != http.StatusOK {
+		return GithubUser{}, fmt.Errorf("status: %d", resp.StatusCode)
 	}
 
 	var user GithubUser
 	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
-		return GithubUser{}, false
+		return GithubUser{}, fmt.Errorf("decode: %w", err)
 	}
 
-	return user, true
+	return user, nil
 }

@@ -2,6 +2,7 @@ package cachehit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"golang.org/x/sync/singleflight"
@@ -42,12 +43,12 @@ func (c *LookThrough[K, V]) reportError(err error) {
 	}
 }
 
-func (c *LookThrough[K, V]) get(ctx context.Context, key K) (V, bool) {
+func (c *LookThrough[K, V]) get(ctx context.Context, key K) (V, error) {
 	k := fmt.Sprintf("%v", key)
 	res, err, _ := c.dedup.Do(k, func() (interface{}, error) {
-		value, found := c.repo.Get(ctx, key)
-		if !found {
-			return nil, errNotFound
+		value, err := c.repo.Get(ctx, key)
+		if err != nil {
+			return nil, fmt.Errorf("repo get: %w", err)
 		}
 
 		if err := c.cache.Set(ctx, key, value); err != nil {
@@ -58,23 +59,26 @@ func (c *LookThrough[K, V]) get(ctx context.Context, key K) (V, bool) {
 
 	if err != nil {
 		var v V
-		return v, false
+		return v, err
 	}
 
 	value, ok := res.(V)
 	if !ok {
 		var v V
-		return v, false
+		return v, fmt.Errorf("value type: expected %T: found %T", v, res)
 	}
 
-	return value, true
+	return value, nil
 }
 
-func (c *LookThrough[K, V]) Get(ctx context.Context, key K) (V, bool) {
-	value, found := c.cache.Get(ctx, key)
-	if found {
-		return value, true
+func (c *LookThrough[K, V]) Get(ctx context.Context, key K) (V, error) {
+	value, err := c.cache.Get(ctx, key)
+	if errors.Is(err, ErrNotFound) {
+		return c.get(ctx, key)
+	} else if err != nil {
+		c.reportError(fmt.Errorf("cache get: %v: %w", key, err))
+		return c.get(ctx, key)
 	}
 
-	return c.get(ctx, key)
+	return value, nil
 }

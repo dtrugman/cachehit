@@ -3,10 +3,12 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/dtrugman/cachehit/internal"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -58,19 +60,21 @@ func From[K comparable, V any](
 	}
 }
 
-func (r *Redis[K, V]) Get(ctx context.Context, key K) (V, bool) {
+func (r *Redis[K, V]) Get(ctx context.Context, key K) (V, error) {
 	var zero V
 
 	keyStr := fmt.Sprintf("%v", key)
 
 	cmd := r.underlying.Get(ctx, keyStr)
-	if cmd.Err() != nil {
-		return zero, false
+	err := cmd.Err()
+	if errors.Is(err, redis.Nil) {
+		return zero, internal.ErrNotFound
+	} else if err != nil {
+		return zero, fmt.Errorf("get: %w", err)
 	}
 	rawValue := cmd.Val()
 
 	var value V
-	var err error
 
 	switch ptr := any(&value).(type) {
 	case *string:
@@ -171,10 +175,10 @@ func (r *Redis[K, V]) Get(ctx context.Context, key K) (V, bool) {
 	}
 
 	if err != nil {
-		return zero, false
+		return zero, fmt.Errorf("parse value: %w", err)
 	}
 
-	return value, true
+	return value, nil
 }
 
 func (r *Redis[K, V]) Set(ctx context.Context, key K, value V) error {

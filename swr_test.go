@@ -168,14 +168,14 @@ func Test_SWR_ValueMissing_NotInRepository(t *testing.T) {
 	cache := &mockCache[string, *entry[string]]{}
 	repo := &mockRepo[string, string]{}
 
-	cache.On("Get", ctx, key).Return(nilEntry, false)
-	repo.On("Get", ctx, key).Return("", false)
+	cache.On("Get", ctx, key).Return(nilEntry, ErrNotFound)
+	repo.On("Get", ctx, key).Return("", ErrNotFound)
 
 	swr, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{})
 	require.NoError(t, err)
 
-	_, found := swr.Get(ctx, key)
-	require.False(t, found)
+	_, err = swr.Get(ctx, key)
+	require.ErrorIs(t, err, ErrNotFound)
 
 	repo.AssertExpectations(t)
 	cache.AssertExpectations(t)
@@ -195,17 +195,17 @@ func Test_SWR_ValueMissing_InRepository(t *testing.T) {
 	cache := &mockCache[string, *entry[string]]{}
 	repo := &mockRepo[string, string]{}
 
-	cache.On("Get", ctx, key).Return(nilEntry, false)
+	cache.On("Get", ctx, key).Return(nilEntry, ErrNotFound)
 
-	repo.On("Get", ctx, key).Return(expected, true)
+	repo.On("Get", ctx, key).Return(expected, nil)
 
 	cache.On("Set", ctx, key, mock.MatchedBy(entryMatcher)).Return(nil)
 
 	swr, err := newSWR(repo, cache, timeToStale, timeToDead, &sync.Map{})
 	require.NoError(t, err)
 
-	actual, found := swr.Get(ctx, key)
-	require.True(t, found)
+	actual, err := swr.Get(ctx, key)
+	require.NoError(t, err)
 	require.Equal(t, expected, actual)
 
 	repo.AssertExpectations(t)
@@ -232,21 +232,21 @@ func Test_SWR_ValueStale_InRepository(t *testing.T) {
 	cache := &mockCache[string, *entry[string]]{}
 	repo := &mockRepo[string, string]{}
 
-	cache.On("Get", ctx, key).Return(staleEntry, true)
+	cache.On("Get", ctx, key).Return(staleEntry, nil)
 
 	repo.On("Get", mock.MatchedBy(isTimeoutContext), key).
 		Run(func(args mock.Arguments) {
 			close(repoGetCalled)
 		}).
-		Return(newValue, true)
+		Return(newValue, nil)
 
 	cache.On("Set", mock.MatchedBy(isTimeoutContext), key, mock.MatchedBy(entryMatcher)).Return(nil)
 
 	swr, err := newSWR(repo, cache, timeToStale, timeToDead, &sync.Map{})
 	require.NoError(t, err)
 
-	actual, found := swr.Get(ctx, key)
-	require.True(t, found)
+	actual, err := swr.Get(ctx, key)
+	require.NoError(t, err)
 	require.Equal(t, oldValue, actual)
 
 	select {
@@ -269,13 +269,13 @@ func Test_SWR_ValueAlive(t *testing.T) {
 	cache := &mockCache[string, *entry[string]]{}
 	repo := &mockRepo[string, string]{}
 
-	cache.On("Get", ctx, key).Return(aliveEntry, true)
+	cache.On("Get", ctx, key).Return(aliveEntry, nil)
 
 	swr, err := newSWR(repo, cache, time.Minute, 2*time.Minute, &sync.Map{})
 	require.NoError(t, err)
 
-	actual, found := swr.Get(ctx, key)
-	require.True(t, found)
+	actual, err := swr.Get(ctx, key)
+	require.NoError(t, err)
 	require.Equal(t, expected, actual)
 
 	repo.AssertExpectations(t)
@@ -298,13 +298,13 @@ func Test_SWR_ParallelFetchWhenMissing(t *testing.T) {
 	cache := &mockCache[string, *entry[string]]{}
 	repo := &mockRepo[string, string]{}
 
-	cache.On("Get", ctx, key).Return(nilEntry, false).Times(n)
+	cache.On("Get", ctx, key).Return(nilEntry, ErrNotFound).Times(n)
 
 	repo.On("Get", ctx, key).
 		Run(func(args mock.Arguments) {
 			time.Sleep(100 * time.Millisecond)
 		}).
-		Return(expected, true).
+		Return(expected, nil).
 		Once()
 
 	cache.On("Set", ctx, key, mock.MatchedBy(entryMatcher)).Return(nil).Once()
@@ -323,8 +323,8 @@ func Test_SWR_ParallelFetchWhenMissing(t *testing.T) {
 			ready.Done()
 			ready.Wait()
 
-			actual, found := swr.Get(ctx, key)
-			require.True(t, found)
+			actual, err := swr.Get(ctx, key)
+			require.NoError(t, err)
 			require.Equal(t, expected, actual)
 
 			done.Done()
@@ -359,14 +359,14 @@ func Test_SWR_ParallelFetchWhenStale(t *testing.T) {
 	cache := &mockCache[string, *entry[string]]{}
 	repo := &mockRepo[string, string]{}
 
-	cache.On("Get", ctx, key).Return(staleEntry, true).Times(n)
+	cache.On("Get", ctx, key).Return(staleEntry, nil).Times(n)
 
 	repo.On("Get", mock.MatchedBy(isTimeoutContext), key).
 		Run(func(args mock.Arguments) {
 			time.Sleep(100 * time.Millisecond)
 			close(repoGetCalled)
 		}).
-		Return(newValue, true).
+		Return(newValue, nil).
 		Once()
 
 	cache.On("Set", mock.MatchedBy(isTimeoutContext), key, mock.MatchedBy(entryMatcher)).Return(nil).Once()
@@ -385,8 +385,8 @@ func Test_SWR_ParallelFetchWhenStale(t *testing.T) {
 			ready.Done()
 			ready.Wait()
 
-			actual, found := swr.Get(ctx, key)
-			require.True(t, found)
+			actual, err := swr.Get(ctx, key)
+			require.NoError(t, err)
 			require.Equal(t, oldValue, actual)
 
 			done.Done()
@@ -419,17 +419,17 @@ func Test_SWR_ValueDead_RefreshFromRepository(t *testing.T) {
 	entryMatcher := getEntryMatcher(newValue, timeToStale, timeToDead)
 
 	cache := &mockCache[string, *entry[string]]{}
-	cache.On("Get", ctx, key).Return(deadEntry, true)
+	cache.On("Get", ctx, key).Return(deadEntry, nil)
 	cache.On("Set", ctx, key, mock.MatchedBy(entryMatcher)).Return(nil)
 
 	repo := &mockRepo[string, string]{}
-	repo.On("Get", ctx, key).Return(newValue, true)
+	repo.On("Get", ctx, key).Return(newValue, nil)
 
 	swr, err := newSWR(repo, cache, timeToStale, timeToDead, &sync.Map{})
 	require.NoError(t, err)
 
-	actual, found := swr.Get(ctx, key)
-	require.True(t, found)
+	actual, err := swr.Get(ctx, key)
+	require.NoError(t, err)
 	require.Equal(t, newValue, actual)
 
 	repo.AssertExpectations(t)
@@ -474,14 +474,14 @@ func Test_SWR_RefreshKey_GracefulHandleFullChannel(t *testing.T) {
 
 	// The first stale key refresh request goes through and the worker
 	// tries to get the value from the repository
-	cache.On("Get", ctx, key1).Return(staleEntry, true).Once()
+	cache.On("Get", ctx, key1).Return(staleEntry, nil).Once()
 	syncMap.On("LoadOrStore", key1, struct{}{}).Return("", false).Once()
 	repo.On("Get", mock.MatchedBy(isTimeoutContext), key1).
 		Run(func(args mock.Arguments) {
 			workerBlocked.Done()
 			workerUnblocked.Wait()
 		}).
-		Return(value1, true).Once()
+		Return(value1, nil).Once()
 
 	// Once the fetch is finished, the value is set and the key is
 	// deleted from the map
@@ -494,12 +494,12 @@ func Test_SWR_RefreshKey_GracefulHandleFullChannel(t *testing.T) {
 	// The second stale key refresh request shoud be pending in the channel,
 	// that is now empty because the first request is being processed by
 	// the worker
-	cache.On("Get", ctx, "key2").Return(staleEntry, true).Once()
+	cache.On("Get", ctx, "key2").Return(staleEntry, nil).Once()
 	syncMap.On("LoadOrStore", key2, struct{}{}).Return("", false).Once()
 
 	// The third stale key refresh request should fail gracefully,
 	// as the channel is full
-	cache.On("Get", ctx, "key3").Return(staleEntry, true).Once()
+	cache.On("Get", ctx, "key3").Return(staleEntry, nil).Once()
 	syncMap.On("LoadOrStore", key3, struct{}{}).Return("", false).Once()
 	syncMap.On("Delete", key3).
 		Run(func(args mock.Arguments) {
@@ -508,7 +508,7 @@ func Test_SWR_RefreshKey_GracefulHandleFullChannel(t *testing.T) {
 
 	// The refresh flow for key2 may or may not complete
 	repo.On("Get", mock.MatchedBy(isTimeoutContext), key2).
-		Return(value2, true).Maybe()
+		Return(value2, nil).Maybe()
 	cache.On("Set", mock.MatchedBy(isTimeoutContext), key2, mock.MatchedBy(entryMatcher2)).
 		Return(nil).Maybe()
 	syncMap.On("Delete", key2).Maybe()
@@ -547,8 +547,8 @@ func Test_SWR_ErrorCallback_CacheSetError(t *testing.T) {
 	cache := &mockCache[string, *entry[string]]{}
 	repo := &mockRepo[string, string]{}
 
-	cache.On("Get", ctx, key).Return(nilEntry, false)
-	repo.On("Get", ctx, key).Return(expected, true)
+	cache.On("Get", ctx, key).Return(nilEntry, ErrNotFound)
+	repo.On("Get", ctx, key).Return(expected, nil)
 
 	cacheSetErr := errors.New("failure")
 	cache.On("Set", ctx, key, mock.MatchedBy(entryMatcher)).Return(cacheSetErr)
@@ -563,12 +563,13 @@ func Test_SWR_ErrorCallback_CacheSetError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	actual, found := swr.Get(ctx, key)
-	require.True(t, found)
+	actual, err := swr.Get(ctx, key)
+	require.NoError(t, err)
 	require.Equal(t, expected, actual)
 
 	require.NotNil(t, capturedErr)
 	require.ErrorIs(t, capturedErr, cacheSetErr)
+	require.ErrorContains(t, capturedErr, key)
 
 	repo.AssertExpectations(t)
 	cache.AssertExpectations(t)
@@ -610,6 +611,7 @@ func Test_SWR_ErrorCallback_CacheGetError(t *testing.T) {
 
 	require.NotNil(t, capturedErr)
 	require.ErrorIs(t, capturedErr, cacheGetErr)
+	require.ErrorContains(t, capturedErr, key)
 
 	repo.AssertExpectations(t)
 	cache.AssertExpectations(t)
@@ -662,6 +664,7 @@ func Test_SWR_ErrorCallback_RefreshWorkerError(t *testing.T) {
 
 	require.NotNil(t, capturedErr)
 	require.ErrorIs(t, capturedErr, repoGetErr)
+	require.ErrorContains(t, capturedErr, key)
 
 	repo.AssertExpectations(t)
 	cache.AssertExpectations(t)

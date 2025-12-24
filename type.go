@@ -2,15 +2,16 @@ package cachehit
 
 import (
 	"context"
-	"errors"
+
+	"github.com/dtrugman/cachehit/internal"
 )
 
 var (
-	errNotFound = errors.New("not found")
+	ErrNotFound = internal.ErrNotFound
 )
 
 type Repository[K comparable, V any] interface {
-	Get(ctx context.Context, key K) (V, bool)
+	Get(ctx context.Context, key K) (V, error)
 }
 
 type Cache[K comparable, V any] interface {

@@ -10,9 +10,9 @@ type mockCache[K comparable, V any] struct {
 	mock.Mock
 }
 
-func (m *mockCache[K, V]) Get(ctx context.Context, key K) (V, bool) {
+func (m *mockCache[K, V]) Get(ctx context.Context, key K) (V, error) {
 	args := m.Called(ctx, key)
-	return args.Get(0).(V), args.Bool(1)
+	return args.Get(0).(V), args.Error(1)
 }
 
 func (m *mockCache[K, V]) Set(ctx context.Context, key K, value V) error {
@@ -24,9 +24,9 @@ type mockRepo[K comparable, V any] struct {
 	mock.Mock
 }
 
-func (m *mockRepo[K, V]) Get(ctx context.Context, key K) (V, bool) {
+func (m *mockRepo[K, V]) Get(ctx context.Context, key K) (V, error) {
 	args := m.Called(ctx, key)
-	return args.Get(0).(V), args.Bool(1)
+	return args.Get(0).(V), args.Error(1)
 }
 
 type mockSyncMap struct {

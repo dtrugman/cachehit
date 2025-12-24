@@ -2,6 +2,7 @@ package cachehit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -111,7 +112,11 @@ func NewSWR[K comparable, V any](
 func (c *SWR[K, V]) refreshWorker() {
 	for key := range c.refreshChan {
 		ctx, cancel := context.WithTimeout(context.Background(), c.refreshTimeout)
-		_, _ = c.get(ctx, key)
+
+		if _, err := c.get(ctx, key); err != nil {
+			c.reportError(fmt.Errorf("refresh: %v: %w", key, err))
+		}
+
 		cancel()
 
 		c.refreshKeys.Delete(key)
@@ -139,12 +144,12 @@ func (c *SWR[K, V]) reportError(err error) {
 	}
 }
 
-func (c *SWR[K, V]) get(ctx context.Context, key K) (V, bool) {
+func (c *SWR[K, V]) get(ctx context.Context, key K) (V, error) {
 	k := fmt.Sprintf("%v", key)
 	res, err, _ := c.dedup.Do(k, func() (interface{}, error) {
-		value, found := c.repo.Get(ctx, key)
-		if !found {
-			return nil, errNotFound
+		value, err := c.repo.Get(ctx, key)
+		if err != nil {
+			return nil, fmt.Errorf("repo get: %w", err)
 		}
 
 		now := time.Now()
@@ -165,30 +170,33 @@ func (c *SWR[K, V]) get(ctx context.Context, key K) (V, bool) {
 
 	if err != nil {
 		var v V
-		return v, false
+		return v, err
 	}
 
 	value, ok := res.(V)
 	if !ok {
 		var v V
-		return v, false
+		return v, fmt.Errorf("value type: expected %T: found %T", v, res)
 	}
 
-	return value, true
+	return value, nil
 }
 
-func (c *SWR[K, V]) Get(ctx context.Context, key K) (V, bool) {
-	entry, ok := c.cache.Get(ctx, key)
-	if !ok {
+func (c *SWR[K, V]) Get(ctx context.Context, key K) (V, error) {
+	entry, err := c.cache.Get(ctx, key)
+	if errors.Is(err, ErrNotFound) {
+		return c.get(ctx, key)
+	} else if err != nil {
+		c.reportError(fmt.Errorf("cache get: %v: %w", key, err))
 		return c.get(ctx, key)
 	}
 
 	now := time.Now()
 	if now.Before(entry.staleAt) {
-		return entry.value, true
+		return entry.value, nil
 	} else if now.Before(entry.deadAt) {
 		c.refreshKey(key)
-		return entry.value, true
+		return entry.value, nil
 	} else {
 		return c.get(ctx, key)
 	}

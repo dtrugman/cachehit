@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/dtrugman/cachehit"
 	redis_adapter "github.com/dtrugman/cachehit/adapter/redis/go-redis/v9"
 	"github.com/dtrugman/cachehit/example/resource"
+	"github.com/dtrugman/cachehit/internal"
 )
 
 type Item struct {
@@ -73,7 +75,14 @@ func run() error {
 	timeToStale := 10 * time.Second
 	timeToDead := 30 * time.Second
 
-	swr, err := cachehit.NewSWR(cacheSize, redisAdapter, timeToStale, timeToDead)
+	errorCallback := func(err error) {
+		fmt.Println("Error:", err)
+	}
+
+	swr, err := cachehit.NewSWR(
+		cacheSize, redisAdapter, timeToStale, timeToDead,
+		cachehit.SWRWithErrorCallback(errorCallback),
+	)
 	if err != nil {
 		return fmt.Errorf("new swr: %w", err)
 	}
@@ -161,14 +170,16 @@ func run() error {
 
 			fmt.Println("Fetching item...")
 			start := time.Now()
-			value, found := swr.Get(ctx, key)
+			value, err := swr.Get(ctx, key)
 			elapsed := time.Since(start)
 
-			if found {
+			if errors.Is(err, internal.ErrNotFound) {
+				fmt.Printf("Not found!\n")
+			} else if err != nil {
+				fmt.Printf("Error: %v\n", err)
+			} else {
 				fmt.Printf("\nFound: %s = %s\n", key, value)
 				fmt.Printf("(fetched in %v)\n", elapsed)
-			} else {
-				fmt.Printf("Not found!\n")
 			}
 
 		case "5":

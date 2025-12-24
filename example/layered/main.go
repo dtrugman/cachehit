@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/dtrugman/cachehit"
 	redis_adapter "github.com/dtrugman/cachehit/adapter/redis/go-redis/v9"
 	"github.com/dtrugman/cachehit/example/resource"
+	"github.com/dtrugman/cachehit/internal"
 )
 
 func showWelcome(timeToStale, timeToDead, redisExpiration time.Duration, cacheSize int) {
@@ -68,7 +70,14 @@ func run() error {
 
 	httpRepo := resource.NewGithubUserRepository()
 
-	lookthrough, err := cachehit.NewLookThrough(redisCache, httpRepo)
+	errorCallback := func(err error) {
+		fmt.Println("Error:", err)
+	}
+
+	lookthrough, err := cachehit.NewLookThrough(
+		redisCache, httpRepo,
+		cachehit.LookThroughWithErrorCallback(errorCallback),
+	)
 	if err != nil {
 		return fmt.Errorf("look through: %w", err)
 	}
@@ -76,7 +85,10 @@ func run() error {
 	cacheSize := 128
 	timeToStale := 10 * time.Second
 	timeToDead := 30 * time.Second
-	swr, err := cachehit.NewSWR(cacheSize, lookthrough, timeToStale, timeToDead)
+	swr, err := cachehit.NewSWR(
+		cacheSize, lookthrough, timeToStale, timeToDead,
+		cachehit.SWRWithErrorCallback(errorCallback),
+	)
 	if err != nil {
 		return fmt.Errorf("new swr: %w", err)
 	}
@@ -102,18 +114,20 @@ func run() error {
 
 			fmt.Println("Fetching user...")
 			start := time.Now()
-			user, found := swr.Get(ctx, username)
+			user, err := swr.Get(ctx, username)
 			elapsed := time.Since(start)
 
-			if found {
+			if errors.Is(err, internal.ErrNotFound) {
+				fmt.Printf("Not found!\n")
+			} else if err != nil {
+				fmt.Printf("Error: %v\n", err)
+			} else {
 				fmt.Printf("\nUser: %s\n", user.Login)
 				fmt.Printf("Name: %s\n", user.Name)
 				fmt.Printf("Company: %s\n", user.Company)
 				fmt.Printf("Location: %s\n", user.Location)
 				fmt.Printf("Followers: %d\n", user.Followers)
 				fmt.Printf("(fetched in %v)\n", elapsed)
-			} else {
-				fmt.Printf("User not found!\n")
 			}
 
 		case "2":
