@@ -16,9 +16,9 @@ func Test_LookThrough_ValueMissing(t *testing.T) {
 	key := "key"
 
 	cache := &mockCache[string, string]{}
-	cache.On("Get", ctx, key).Return("", false)
-
 	repo := &mockCache[string, string]{}
+
+	cache.On("Get", ctx, key).Return("", false)
 	repo.On("Get", ctx, key).Return("", false)
 
 	lt, err := NewLookThrough(cache, repo)
@@ -38,11 +38,11 @@ func Test_LookThrough_ValueInRepository(t *testing.T) {
 	expected := "value"
 
 	cache := &mockCache[string, string]{}
-	cache.On("Get", ctx, key).Return("", false)
-	cache.On("Set", ctx, key, expected).Return(nil)
-
 	repo := &mockCache[string, string]{}
+
+	cache.On("Get", ctx, key).Return("", false)
 	repo.On("Get", ctx, key).Return(expected, true)
+	cache.On("Set", ctx, key, expected).Return(nil)
 
 	lt, err := NewLookThrough(cache, repo)
 	require.NoError(t, err)
@@ -62,9 +62,9 @@ func Test_LookThrough_ValueInCache(t *testing.T) {
 	expected := "value"
 
 	cache := &mockCache[string, string]{}
-	cache.On("Get", ctx, key).Return(expected, true)
-
 	repo := &mockCache[string, string]{}
+
+	cache.On("Get", ctx, key).Return(expected, true)
 
 	lt, err := NewLookThrough(cache, repo)
 	require.NoError(t, err)
@@ -86,16 +86,16 @@ func Test_LookThrough_ParallelFetch(t *testing.T) {
 	n := 50
 
 	cache := &mockCache[string, string]{}
-	cache.On("Get", ctx, key).Return("", false).Times(n)
-	cache.On("Set", ctx, key, expected).Return(nil).Once()
-
 	repo := &mockCache[string, string]{}
+
+	cache.On("Get", ctx, key).Return("", false).Times(n)
 	repo.On("Get", ctx, key).
 		Run(func(args mock.Arguments) {
 			time.Sleep(100 * time.Millisecond)
 		}).
 		Return(expected, true).
 		Once()
+	cache.On("Set", ctx, key, expected).Return(nil).Once()
 
 	lt, err := NewLookThrough(cache, repo)
 	require.NoError(t, err)
@@ -133,11 +133,11 @@ func Test_LookThrough_ErrorCallbackCalled_CacheSet(t *testing.T) {
 	cacheSetErr := errors.New("failed")
 
 	cache := &mockCache[string, string]{}
-	cache.On("Get", ctx, key).Return("", false)
-	cache.On("Set", ctx, key, value).Return(cacheSetErr)
-
 	repo := &mockCache[string, string]{}
+
+	cache.On("Get", ctx, key).Return("", false)
 	repo.On("Get", ctx, key).Return(value, true)
+	cache.On("Set", ctx, key, value).Return(cacheSetErr)
 
 	var capturedErr error
 	errorCallback := func(err error) {
