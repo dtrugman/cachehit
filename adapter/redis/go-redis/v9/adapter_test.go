@@ -30,6 +30,19 @@ func TestFrom_WithExpiration(t *testing.T) {
 	require.Equal(t, expiration, adapter.expiration)
 }
 
+func TestRedis_Error(t *testing.T) {
+	ctx := context.Background()
+
+	disconnectedClient := redis.NewClient(&redis.Options{
+		Addr: "localhost:9999",
+	})
+	adapter := From[string, string](disconnectedClient)
+
+	key := uuid.New().String()
+	_, err := adapter.Get(ctx, key)
+	require.Error(t, err)
+}
+
 func TestRedis_Operations(t *testing.T) {
 	ctx := context.Background()
 
@@ -344,5 +357,188 @@ func TestRedis_Operations(t *testing.T) {
 		value, err := adapter.Get(ctx, intKey)
 		require.NoError(t, err)
 		require.Equal(t, "value1", value)
+	})
+
+	t.Run("ParsingErrors", func(t *testing.T) {
+		t.Run("Bool", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, bool](client)
+
+			cmd := client.Set(ctx, key, "invalid", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("Int", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, int](client)
+
+			cmd := client.Set(ctx, key, "not-a-number", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("Int8", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, int8](client)
+
+			cmd := client.Set(ctx, key, "999", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("Int16", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, int16](client)
+
+			cmd := client.Set(ctx, key, "99999", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("Int32", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, int32](client)
+
+			cmd := client.Set(ctx, key, "9999999999", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("Int64", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, int64](client)
+
+			cmd := client.Set(ctx, key, "not-a-number", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("Uint", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, uint](client)
+
+			cmd := client.Set(ctx, key, "-42", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("Uint8", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, uint8](client)
+
+			cmd := client.Set(ctx, key, "999", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("Uint16", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, uint16](client)
+
+			cmd := client.Set(ctx, key, "99999", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("Uint32", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, uint32](client)
+
+			cmd := client.Set(ctx, key, "9999999999", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("Uint64", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, uint64](client)
+
+			cmd := client.Set(ctx, key, "-1", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("Float32", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, float32](client)
+
+			cmd := client.Set(ctx, key, "not-a-float", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("Float64", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, float64](client)
+
+			cmd := client.Set(ctx, key, "not-a-float", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+
+		t.Run("JSON", func(t *testing.T) {
+			type TestStruct struct {
+				Name  string
+				Value int
+			}
+
+			key := uuid.New().String()
+			adapter := From[string, TestStruct](client)
+
+			cmd := client.Set(ctx, key, "invalid-json{", 0)
+			require.NoError(t, cmd.Err())
+
+			_, err := adapter.Get(ctx, key)
+			require.Error(t, err)
+		})
+	})
+
+	t.Run("MarshallingErrors", func(t *testing.T) {
+		t.Run("UnsupportedType", func(t *testing.T) {
+			key := uuid.New().String()
+			adapter := From[string, chan int](client)
+
+			err := adapter.Set(ctx, key, make(chan int))
+			require.Error(t, err)
+		})
+
+		t.Run("UnsupportedTypeInStruct", func(t *testing.T) {
+			type InvalidStruct struct {
+				Ch chan int
+			}
+
+			key := uuid.New().String()
+			adapter := From[string, InvalidStruct](client)
+
+			err := adapter.Set(ctx, key, InvalidStruct{Ch: make(chan int)})
+			require.Error(t, err)
+		})
 	})
 }
